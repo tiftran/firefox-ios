@@ -166,7 +166,9 @@ class SearchViewController: SiteTableViewController,
     }
 
     private func loadFirefoxSuggestions() {
-        guard featureFlags.isFeatureEnabled(.firefoxSuggestFeature, checking: .buildAndUser) else { return }
+        let isSponsoredSuggestionEnabled = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestFeatureEnable) ?? false
+        let includeSponsors = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowSponsoredSuggestions) ?? false
+        guard featureFlags.isFeatureEnabled(.firefoxSuggestFeature, checking: .buildAndUser) && isSponsoredSuggestionEnabled else { return }
 
         profile.firefoxSuggest?.interruptReader()
 
@@ -174,7 +176,7 @@ class SearchViewController: SiteTableViewController,
         Task { [weak self] in
             guard let suggestions = try? await self?.profile.firefoxSuggest?.query(
                 tempSearchQuery,
-                includeSponsored: true,
+                includeSponsored: includeSponsors,
                 includeNonSponsored: true
             ) else { return }
             await MainActor.run {

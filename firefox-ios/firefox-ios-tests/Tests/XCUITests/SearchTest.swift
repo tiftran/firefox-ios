@@ -280,4 +280,12 @@ class SearchTests: BaseTestCase {
         waitForTabsButton()
         validateSearchSuggestionText(typeText: "localhost")
     }
+    
+    func testFirefoxSuggestionsSettings(){
+        navigator.goto(SettingsScreen)
+        navigator.goto(SearchSettings)
+        app.swipeUp()
+        mozWaitForElementToExist(app.staticTexts["Suggestions from Firefox"], timeout: 10)
+        mozWaitForElementToExist(app.staticTexts["Suggestions from sponsors"], timeout: 10)
+    }
 }

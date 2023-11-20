@@ -1668,6 +1668,45 @@ extension String {
                     tableName: "Settings",
                     value: "Default Search Engine",
                     comment: "Accessibility label for default search engine setting.")
+                public static let LearnAboutSuggestions = MZLocalizedString(
+                    key: "Settings.Search.Accessibility.LearnAboutSuggestions.v121",
+                    tableName: "Settings",
+                    value: "Learn more about Firefox Suggest",
+                    comment: "Accessibility label for Learn more about Firefox Suggest.")
+            }
+            
+            public struct Suggest {
+                public static let AddressBarSettingsTitle = MZLocalizedString(
+                    key: "Settings.Search.Suggest.AddressBarSetting.Title.v122",
+                    tableName: "Settings",
+                    value: "Address bar - Firefox Suggest",
+                    comment: "Title for address bar Fx Suggest Settings.")
+                public static let SuggestionsFromFirefoxTitle = MZLocalizedString(
+                    key: "Settings.Search.Suggest.SuggestionsFromFirefox.Title.v122",
+                    tableName: "Settings",
+                    value: "Suggestions from Firefox",
+                    comment: "Title for setting to enable Suggestions from Firefox.")
+                public static let SuggestionsfromFirefoxDescription = MZLocalizedString(
+                    key: "Settings.Search.Suggest.SuggestionsFromFirefox.Description.v122",
+                    tableName: "Settings",
+                    value: "Get suggestions from the web related to your search",
+                    comment: "Description for enabling suggestions from Firefox")
+                public static let SuggestionsFromSponsorsTitle = MZLocalizedString(
+                    key: "Settings.Search.Suggest.SuggestionsFromSponsors.Title.v122",
+                    tableName: "Settings",
+                    value: "Suggestions from sponsors",
+                    comment: "Title for setting to enable Suggestions from sponors.")
+                public static let SuggestionsFromSponsorsDescription = MZLocalizedString(
+                    key: "Settings.Search.Suggest.SuggestionsFromSponsors.Description.v122",
+                    tableName: "Settings",
+                    value: "Support Firefox with occasional sponsored suggestions",
+                    comment: "Description for enabling suggestions from sponsors.")
+                public static let LearnAboutSuggestions = MZLocalizedString(
+                    key: "Settings.Search.Suggest.LearnAboutSuggestions.v122Defaul",
+                    tableName: "Settings",
+                    value: "Learn more about Firefox Suggest",
+                    comment: "Title for link to Sumo Page about Firefox Suggest"
+                )
             }
         }
     }

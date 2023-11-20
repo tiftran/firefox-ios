@@ -15,12 +15,19 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     private let model: SearchEngines
 
     fileprivate let SectionDefault = 0
+    fileprivate let SectionSearchEngines = 1
+    fileprivate let SectionFirefoxSuggestion = 2
     fileprivate let ItemDefaultEngine = 0
     fileprivate let ItemDefaultSuggestions = 1
     fileprivate let ItemAddCustomSearch = 2
+    fileprivate let ItemSuggestionFirefox = 0
+    fileprivate let ItemSuggestionSponsors = 1
+    fileprivate let ItemSuggestionLearn = 2
     fileprivate let NumberOfItemsInSectionDefault = 2
+    fileprivate let NumberOfItemsInSectionSuggestions = 3
     fileprivate let SectionOrder = 1
     fileprivate let NumberOfSections = 2
+    fileprivate let NumberOfSectionsFirefoxSuggestEnabled = 3
     fileprivate let IconSize = CGSize(width: OpenSearchEngine.UX.preferredIconSize,
                                       height: OpenSearchEngine.UX.preferredIconSize)
 
@@ -59,7 +66,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
 
         tableView.register(ThemedTableSectionHeaderFooterView.self,
                            forHeaderFooterViewReuseIdentifier: ThemedTableSectionHeaderFooterView.cellIdentifier)
-
+        tableView.register(ThemedSubtitleTableViewCell.self, forCellReuseIdentifier: ThemedSubtitleTableViewCell.cellIdentifier)
         // Insert Done button if being presented outside of the Settings Nav stack
         if !(self.navigationController is ThemedNavigationController) {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: .SettingsSearchDoneButton, style: .done, target: self, action: #selector(self.dismissAnimated))
@@ -87,8 +94,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = dequeueCellFor(indexPath: indexPath)
-        cell.applyTheme(theme: themeManager.currentTheme)
+        let cell = tableView.dequeueReusableCell(withIdentifier: ThemedSubtitleTableViewCell.cellIdentifier, for: indexPath)
         var engine: OpenSearchEngine!
 
         if indexPath.section == SectionDefault {
@@ -115,7 +121,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
                 // Should not happen.
                 break
             }
-        } else {
+        } else if indexPath.section == SectionSearchEngines {
             // The default engine is not a quick search engine.
             let index = indexPath.item + 1
             if index < model.orderedEngines.count {
@@ -144,6 +150,44 @@ class SearchSettingsTableViewController: ThemedTableViewController {
                 cell.accessibilityIdentifier = AccessibilityIdentifiers.Settings.Search.customEngineViewButton
                 cell.textLabel?.text = .SettingsAddCustomEngine
             }
+        } else {
+            switch indexPath.item {
+                case ItemSuggestionFirefox:
+                    let setting = BoolSetting(
+                        prefs: profile.prefs,
+                        theme: themeManager.currentTheme,
+                        prefKey: PrefsKeys.FirefoxSuggestFeatureEnable,
+                        defaultValue: profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestFeatureEnable) ?? true,
+                        titleText: .Settings.Search.Suggest.SuggestionsFromFirefoxTitle,
+                        statusText: .Settings.Search.Suggest.SuggestionsfromFirefoxDescription
+                    )
+                    setting.onConfigureCell(cell, theme: themeManager.currentTheme)
+                    setting.control.addTarget(self, action: #selector(didToggleEnableFirefoxSuggestions), for: .valueChanged)
+                    cell.editingAccessoryView = setting.control
+                    cell.selectionStyle = .none
+                case ItemSuggestionSponsors:
+                    let setting = BoolSetting(
+                        prefs: profile.prefs,
+                        theme: themeManager.currentTheme,
+                        prefKey: PrefsKeys.FirefoxSuggestShowSponsoredSuggestions,
+                        defaultValue: profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowSponsoredSuggestions) ?? true,
+                        titleText: .Settings.Search.Suggest.SuggestionsFromSponsorsTitle,
+                        statusText: .Settings.Search.Suggest.SuggestionsFromSponsorsDescription
+                    )
+                    setting.onConfigureCell(cell, theme: themeManager.currentTheme)
+                    setting.control.addTarget(self, action: #selector(didToggleEnableSponsoredSuggestions), for: .valueChanged)
+                    cell.editingAccessoryView = setting.control
+                    cell.selectionStyle = .none
+                case ItemSuggestionLearn:
+                    cell.accessibilityLabel = .Settings.Search.AccessibilityLabels.LearnAboutSuggestions
+                    cell.textLabel?.text = .Settings.Search.Suggest.LearnAboutSuggestions
+                    cell.imageView?.layer.cornerRadius = 4
+                    cell.imageView?.layer.masksToBounds = true
+                    cell.selectionStyle = .none
+
+            default:
+                break
+            }
         }
 
         // So that the separator line goes all the way to the left edge.
@@ -153,16 +197,20 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
+        if (LegacyFeatureFlagsManager.shared.isFeatureEnabled(.firefoxSuggestFeature, checking: .buildAndUser)){
+            return NumberOfSectionsFirefoxSuggestEnabled
+        }
         return NumberOfSections
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if section == SectionDefault {
-            return NumberOfItemsInSectionDefault
-        } else {
-            // The first engine -- the default engine -- is not shown in the quick search engine list.
-            // But the option to add Custom Engine is.
-            return model.orderedEngines.count
+        switch section {
+            case SectionDefault:
+                return NumberOfItemsInSectionDefault
+            case SectionFirefoxSuggestion:
+                return NumberOfItemsInSectionSuggestions
+            default:
+                return model.orderedEngines.count
         }
     }
 
@@ -185,13 +233,18 @@ class SearchSettingsTableViewController: ThemedTableViewController {
                                                 theme: self.themeManager.currentTheme)
             }
             navigationController?.pushViewController(customSearchEngineForm, animated: true)
+        } else if indexPath.section == SectionFirefoxSuggestion && indexPath.item == ItemSuggestionLearn {
+            let viewController = SettingsContentViewController()
+            viewController.url = SupportUtils.URLForTopic("turn-search-suggestions-or-firefox-ios")
+            navigationController?.pushViewController(viewController, animated: true)
         }
+
         return nil
     }
 
     // Don't show delete button on the left.
     override func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {
-        if indexPath.section == SectionDefault || indexPath.item + 1 == model.orderedEngines.count {
+        if indexPath.section == SectionDefault || indexPath.item + 1 == model.orderedEngines.count || indexPath.section == SectionFirefoxSuggestion {
             return UITableViewCell.EditingStyle.none
         }
 
@@ -236,6 +289,8 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         var sectionTitle: String
         if section == SectionDefault {
             sectionTitle = .Settings.Search.DefaultSearchEngineTitle
+        } else if section == SectionFirefoxSuggestion {
+            sectionTitle = .Settings.Search.Suggest.AddressBarSettingsTitle
         } else {
             sectionTitle = .Settings.Search.QuickSearchEnginesTitle
         }
@@ -252,7 +307,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        if indexPath.section == SectionDefault || indexPath.item + 1 == model.orderedEngines.count {
+        if [SectionDefault, SectionFirefoxSuggestion].contains(indexPath.section) || indexPath.item + 1 == model.orderedEngines.count {
             return false
         } else {
             return true
@@ -343,6 +398,16 @@ extension SearchSettingsTableViewController {
     func didToggleSearchSuggestions(_ toggle: ThemedSwitch) {
         // Setting the value in settings dismisses any opt-in.
         model.shouldShowSearchSuggestions = toggle.isOn
+    }
+    
+    @objc
+    func didToggleEnableFirefoxSuggestions(_ toggle: ThemedSwitch) {
+        profile.prefs.setBool(toggle.isOn, forKey: PrefsKeys.FirefoxSuggestFeatureEnable)
+    }
+    
+    @objc
+    func didToggleEnableSponsoredSuggestions(_ toggle: ThemedSwitch) {
+        profile.prefs.setBool(toggle.isOn, forKey: PrefsKeys.FirefoxSuggestShowSponsoredSuggestions)
     }
 
     func cancel() {
