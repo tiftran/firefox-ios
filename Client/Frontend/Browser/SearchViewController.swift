@@ -70,35 +70,36 @@ class SearchViewController: SiteTableViewController,
     private var searchHighlights = [HighlightItem]()
     private var firefoxSuggestions = [RustFirefoxSuggestion]()
     private var highlightManager: HistoryHighlightsManagerProtocol
-
+    private var filteredBookmarksAndHistory = [Site?]()
+    
     // Views for displaying the bottom scrollable search engine list. searchEngineScrollView is the
     // scrollable container; searchEngineScrollViewContent contains the actual set of search engine buttons.
     private let searchEngineContainerView = UIView()
     private let searchEngineScrollView = ButtonScrollView()
     private let searchEngineScrollViewContent = UIView()
-
+    
     private lazy var bookmarkedBadge: UIImage = {
         return UIImage(named: StandardImageIdentifiers.Medium.bookmarkBadgeFillBlue50)!
     }()
-
+    
     private lazy var openAndSyncTabBadge: UIImage = {
         return UIImage(named: "sync_open_tab")!
     }()
-
+    
     var suggestions: [String]? = []
     var savedQuery: String = ""
     var searchFeature: FeatureHolder<Search>
     static var userAgent: String?
-
+    
     var hasFirefoxSuggestions: Bool {
-        let dataCount = data.count
+        let dataCount = filteredBookmarksAndHistory.count
         return dataCount != 0
-            || !filteredOpenedTabs.isEmpty
-            || !filteredRemoteClientTabs.isEmpty
-            || !searchHighlights.isEmpty
-            || !firefoxSuggestions.isEmpty
+        || !filteredOpenedTabs.isEmpty
+        || !filteredRemoteClientTabs.isEmpty
+        || !searchHighlights.isEmpty
+        || !firefoxSuggestions.isEmpty
     }
-
+    
     init(profile: Profile,
          viewModel: SearchViewModel,
          model: SearchEngines,
@@ -111,67 +112,67 @@ class SearchViewController: SiteTableViewController,
         self.searchFeature = featureConfig
         self.highlightManager = highlightManager
         super.init(profile: profile)
-
+        
         if #available(iOS 15.0, *) {
             tableView.sectionHeaderTopPadding = 0
         }
     }
-
+    
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         getCachedTabs()
         KeyboardHelper.defaultHelper.addDelegate(self)
-
+        
         searchEngineContainerView.layer.shadowRadius = 0
         searchEngineContainerView.layer.shadowOpacity = 100
         searchEngineContainerView.layer.shadowOffset = CGSize(width: 0,
                                                               height: -SearchViewControllerUX.SearchEngineTopBorderWidth)
         searchEngineContainerView.clipsToBounds = false
-
+        
         searchEngineScrollView.decelerationRate = UIScrollView.DecelerationRate.fast
         searchEngineContainerView.addSubview(searchEngineScrollView)
         view.addSubview(searchEngineContainerView)
-
+        
         searchEngineScrollViewContent.layer.backgroundColor = UIColor.clear.cgColor
         searchEngineScrollView.addSubview(searchEngineScrollViewContent)
-
+        
         layoutTable()
         layoutSearchEngineScrollView()
         layoutSearchEngineScrollViewContent()
-
+        
         searchEngineContainerView.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
         }
-
+        
         setupNotifications(forObserver: self, observing: [.DynamicFontChanged,
                                                           .SearchSettingsChanged])
     }
-
+    
     private func loadSearchHighlights() {
         guard featureFlags.isFeatureEnabled(.searchHighlights, checking: .buildOnly) else { return }
-
+        
         highlightManager.searchHighlightsData(
             searchQuery: searchQuery,
             profile: profile,
             tabs: tabManager.tabs,
             resultCount: 3) { results in
-            guard let results = results else { return }
-            self.searchHighlights = results
-            self.tableView.reloadData()
-        }
+                guard let results = results else { return }
+                self.searchHighlights = results
+                self.tableView.reloadData()
+            }
     }
-
+    
     private func loadFirefoxSuggestions() {
         let isSponsoredSuggestionEnabled = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestFeatureEnable) ?? false
         let includeSponsors = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowSponsoredSuggestions) ?? false
         guard featureFlags.isFeatureEnabled(.firefoxSuggestFeature, checking: .buildAndUser) && isSponsoredSuggestionEnabled else { return }
-
+        
         profile.firefoxSuggest?.interruptReader()
-
+        
         let tempSearchQuery = searchQuery
         Task { [weak self] in
             guard let suggestions = try? await self?.profile.firefoxSuggest?.query(
@@ -186,24 +187,24 @@ class SearchViewController: SiteTableViewController,
             }
         }
     }
-
+    
     func dynamicFontChanged(_ notification: Notification) {
         guard notification.name == .DynamicFontChanged else { return }
-
+        
         reloadData()
     }
-
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         reloadSearchEngines()
         reloadData()
     }
-
+    
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         searchFeature.recordExposure()
     }
-
+    
     private func layoutSearchEngineScrollView() {
         let keyboardHeight = KeyboardHelper.defaultHelper.currentState?.intersectionHeightForView(self.view) ?? 0
         searchEngineScrollView.snp.remakeConstraints { make in
@@ -216,7 +217,7 @@ class SearchViewController: SiteTableViewController,
             }
         }
     }
-
+    
     private func layoutSearchEngineScrollViewContent() {
         searchEngineScrollViewContent.snp.remakeConstraints { make in
             make.center.equalTo(self.searchEngineScrollView).priority(10)
@@ -231,52 +232,52 @@ class SearchViewController: SiteTableViewController,
             make.bottom.equalTo(self.searchEngineScrollView)
         }
     }
-
+    
     var searchEngines: SearchEngines? {
         didSet {
             guard let defaultEngine = searchEngines?.defaultEngine else { return }
-
+            
             suggestClient?.cancelPendingRequest()
-
+            
             // Query and reload the table with new search suggestions.
             querySuggestClient()
-
+            
             // Show the default search engine first.
             if !viewModel.isPrivate {
                 let ua = SearchViewController.userAgent ?? "FxSearch"
                 suggestClient = SearchSuggestClient(searchEngine: defaultEngine, userAgent: ua)
             }
-
+            
             // Reload the footer list of search engines.
             reloadSearchEngines()
         }
     }
-
+    
     private var quickSearchEngines: [OpenSearchEngine] {
         guard let defaultEngine = searchEngines?.defaultEngine else { return [] }
-
+        
         var engines = searchEngines?.quickSearchEngines
-
+        
         // If we're not showing search suggestions, the default search engine won't be visible
         // at the top of the table. Show it with the others in the bottom search bar.
         if viewModel.isPrivate || !(searchEngines?.shouldShowSearchSuggestions ?? false) {
             engines?.insert(defaultEngine, at: 0)
         }
-
+        
         return engines!
     }
-
+    
     var searchQuery: String = "" {
         didSet {
             // Reload the tableView to show the updated text in each engine.
             reloadData()
         }
     }
-
+    
     override func reloadData() {
         querySuggestClient()
     }
-
+    
     private func layoutTable() {
         // Note: We remove and re-add tableview from superview so that we can update
         // the constraints to be aligned with Search Engine Scroll View top anchor
@@ -289,11 +290,11 @@ class SearchViewController: SiteTableViewController,
             tableView.bottomAnchor.constraint(equalTo: searchEngineScrollView.topAnchor)
         ])
     }
-
+    
     func reloadSearchEngines() {
         searchEngineScrollViewContent.subviews.forEach { $0.removeFromSuperview() }
         var leftEdge = searchEngineScrollViewContent.snp.leading
-
+        
         // search settings icon
         let searchButton = UIButton()
         searchButton.setImage(UIImage(named: "quickSearch"), for: [])
@@ -301,12 +302,12 @@ class SearchViewController: SiteTableViewController,
         searchButton.layer.backgroundColor = SearchViewControllerUX.EngineButtonBackgroundColor
         searchButton.addTarget(self, action: #selector(didClickSearchButton), for: .touchUpInside)
         searchButton.accessibilityLabel = String(format: .SearchSettingsAccessibilityLabel)
-
+        
         searchButton.imageView?.snp.makeConstraints { make in
             make.width.height.equalTo(20)
             return
         }
-
+        
         searchEngineScrollViewContent.addSubview(searchButton)
         searchButton.snp.makeConstraints { make in
             make.width.height.equalTo(SearchViewControllerUX.FaviconSize)
@@ -315,10 +316,10 @@ class SearchViewController: SiteTableViewController,
             make.top.equalTo(searchEngineScrollViewContent).offset(SearchViewControllerUX.SuggestionMargin)
             make.bottom.equalTo(searchEngineScrollViewContent).offset(-SearchViewControllerUX.SuggestionMargin)
         }
-
+        
         // search engines
         leftEdge = searchButton.snp.trailing
-
+        
         for engine in quickSearchEngines {
             let engineButton = UIButton()
             engineButton.setImage(engine.image, for: [])
@@ -327,12 +328,12 @@ class SearchViewController: SiteTableViewController,
             engineButton.layer.backgroundColor = SearchViewControllerUX.EngineButtonBackgroundColor
             engineButton.addTarget(self, action: #selector(didSelectEngine), for: .touchUpInside)
             engineButton.accessibilityLabel = String(format: .SearchSearchEngineAccessibilityLabel, engine.shortName)
-
+            
             engineButton.imageView?.snp.makeConstraints { make in
                 make.width.height.equalTo(SearchViewControllerUX.FaviconSize)
                 return
             }
-
+            
             searchEngineScrollViewContent.addSubview(engineButton)
             engineButton.snp.makeConstraints { make in
                 make.width.equalTo(SearchViewControllerUX.EngineButtonWidth)
@@ -347,7 +348,7 @@ class SearchViewController: SiteTableViewController,
             leftEdge = engineButton.snp.trailing
         }
     }
-
+    
     func didSelectEngine(_ sender: UIButton) {
         // The UIButtons are the same cardinality and order as the array of quick search engines.
         // Subtract 1 from index to account for magnifying glass accessory.
@@ -355,9 +356,9 @@ class SearchViewController: SiteTableViewController,
             assertionFailure()
             return
         }
-
+        
         let engine = quickSearchEngines[index - 1]
-
+        
         guard let url = engine.searchURLForQuery(searchQuery) else {
             assertionFailure()
             return
@@ -368,26 +369,26 @@ class SearchViewController: SiteTableViewController,
                                           method: .tap,
                                           object: .recordSearch,
                                           extras: extras)
-
+        
         searchDelegate?.searchViewController(self, didSelectURL: url, searchTerm: "")
     }
-
+    
     func didClickSearchButton() {
         self.searchDelegate?.presentSearchSettingsController()
     }
-
+    
     func keyboardHelper(_ keyboardHelper: KeyboardHelper, keyboardWillShowWithState state: KeyboardState) {
         animateSearchEnginesWithKeyboard(state)
     }
-
+    
     func keyboardHelper(_ keyboardHelper: KeyboardHelper, keyboardWillHideWithState state: KeyboardState) {
         animateSearchEnginesWithKeyboard(state)
     }
-
+    
     func keyboardHelper(_ keyboardHelper: KeyboardHelper, keyboardWillChangeWithState state: KeyboardState) {
         animateSearchEnginesWithKeyboard(state)
     }
-
+    
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         // The height of the suggestions row may change, so call reloadData() to recalculate cell heights.
@@ -396,10 +397,10 @@ class SearchViewController: SiteTableViewController,
             self.layoutSearchEngineScrollViewContent()
         }, completion: nil)
     }
-
+    
     private func animateSearchEnginesWithKeyboard(_ keyboardState: KeyboardState) {
         layoutSearchEngineScrollView()
-
+        
         UIView.animate(
             withDuration: keyboardState.animationDuration,
             delay: 0,
@@ -408,11 +409,11 @@ class SearchViewController: SiteTableViewController,
                 self.view.layoutIfNeeded()
             })
     }
-
+    
     private func getCachedTabs() {
         // Short circuit if the user is not logged in
         guard profile.hasSyncableAccount() else { return }
-
+        
         ensureMainThread {
             // Get cached tabs
             self.profile.getCachedClientsAndTabs().uponQueue(.main) { result in
@@ -427,10 +428,10 @@ class SearchViewController: SiteTableViewController,
             }
         }
     }
-
+    
     func searchTabs(for searchString: String) {
         let currentTabs = viewModel.isPrivate ? tabManager.privateTabs : tabManager.normalTabs
-
+        
         // Small helper function to do case insensitive searching.
         // We split the search query by spaces so we can simulate full text search.
         let searchTerms = searchString.split(separator: " ")
@@ -446,63 +447,68 @@ class SearchViewController: SiteTableViewController,
         // Searching within the content will get annoying, so only start searching
         // in content when there are at least one word with more than 3 letters in.
         let searchInContent = config.usePageContent
-            && searchTerms.find { $0.count >= config.minSearchTerm } != nil
-
+        && searchTerms.find { $0.count >= config.minSearchTerm } != nil
+        
         filteredOpenedTabs = currentTabs.filter { tab in
             guard let url = tab.url ?? tab.sessionData?.urls.last,
                   !InternalURL.isValid(url: url) else {
                 return false
             }
             let lines = [
-                    tab.title ?? tab.lastTitle,
-                    searchInContent ? tab.readabilityResult?.textContent : nil,
-                    url.absoluteString
-                ]
+                tab.title ?? tab.lastTitle,
+                searchInContent ? tab.readabilityResult?.textContent : nil,
+                url.absoluteString
+            ]
                 .compactMap { $0 }
-
+            
             let text = lines.joined(separator: "\n")
             return find(in: text)
         }
     }
-
+    
     func searchRemoteTabs(for searchString: String) {
         filteredRemoteClientTabs.removeAll()
         for remoteClientTab in remoteClientTabs where remoteClientTab.tab.title.lowercased().contains(searchQuery) {
             filteredRemoteClientTabs.append(remoteClientTab)
         }
-
+        
         let currentTabs = self.remoteClientTabs
         self.filteredRemoteClientTabs = currentTabs.filter { value in
             let tab = value.tab
-
+            
             if InternalURL.isValid(url: tab.URL) {
                 return false
             }
-
+            
+            /// TODO tif filter here for sync tabs
+            
+            if containsQueryParameters(searchParamString: "mfadid=adm", url: tab.URL){
+                return false
+            }
             if tab.title.lowercased().contains(searchString.lowercased()) {
                 return true
             }
-
+            
             if tab.URL.absoluteString.lowercased().contains(searchString.lowercased()) {
                 return true
             }
-
+            
             return false
         }
     }
-
+    
     private func querySuggestClient() {
         suggestClient?.cancelPendingRequest()
-
+        
         if searchQuery.isEmpty || !(searchEngines?.shouldShowSearchSuggestions ?? false) || searchQuery.looksLikeAURL() {
             suggestions = []
             tableView.reloadData()
             return
         }
-
+        
         loadSearchHighlights()
         loadFirefoxSuggestions()
-
+        
         let tempSearchQuery = searchQuery
         suggestClient?.query(searchQuery, callback: { suggestions, error in
             if error == nil {
@@ -512,12 +518,12 @@ class SearchViewController: SiteTableViewController,
                 // First suggestion should be what the user is searching
                 self.suggestions?.insert(self.searchQuery, at: 0)
             }
-
+            
             // If there are no suggestions, just use whatever the user typed.
             if suggestions?.isEmpty ?? true {
                 self.suggestions = [self.searchQuery]
             }
-
+            
             self.searchTabs(for: self.searchQuery)
             self.searchRemoteTabs(for: self.searchQuery)
             // Reload the tableView to show the new list of search suggestions.
@@ -525,26 +531,27 @@ class SearchViewController: SiteTableViewController,
             self.tableView.reloadData()
         })
     }
-
+    
     func loader(dataLoaded data: Cursor<Site>) {
+        filteredBookmarksAndHistory = filterData(data: data)
         self.data = data
         tableView.reloadData()
     }
-
+    
     // MARK: - Table view delegate
-
+    
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         switch SearchListSection(rawValue: indexPath.section)! {
         case .searchSuggestions:
             guard let defaultEngine = searchEngines?.defaultEngine else { return }
-
+            
             recordSearchListSelectionTelemetry(type: .searchSuggestions)
             // Assume that only the default search engine can provide search suggestions.
             guard let suggestions = suggestions,
                   let suggestion = suggestions[safe: indexPath.row],
                   let url = defaultEngine.searchURLForQuery(suggestion)
             else { return }
-
+            
             let extras = [TelemetryWrapper.EventExtraKey.recordSearchLocation.rawValue: SearchesMeasurement.SearchLocation.suggestion,
                           TelemetryWrapper.EventExtraKey.recordSearchEngineID.rawValue: defaultEngine.engineID as Any] as [String: Any]
             TelemetryWrapper.gleanRecordEvent(category: .action,
@@ -561,7 +568,7 @@ class SearchViewController: SiteTableViewController,
             let remoteTab = self.filteredRemoteClientTabs[indexPath.row].tab
             searchDelegate?.searchViewController(self, didSelectURL: remoteTab.URL, searchTerm: nil)
         case .bookmarksAndHistory:
-            if let site = data[indexPath.row] {
+            if let site = filteredBookmarksAndHistory[indexPath.row] {
                 recordSearchListSelectionTelemetry(type: .bookmarksAndHistory,
                                                    isBookmark: site.bookmarked ?? false)
                 if let url = URL(string: site.url, invalidCharacters: false) {
@@ -570,7 +577,7 @@ class SearchViewController: SiteTableViewController,
             }
         case .searchHighlights:
             if let urlString = searchHighlights[indexPath.row].urlString,
-                let url = URL(string: urlString, invalidCharacters: false) {
+               let url = URL(string: urlString, invalidCharacters: false) {
                 recordSearchListSelectionTelemetry(type: .searchHighlights)
                 searchDelegate?.searchViewController(self, didSelectURL: url, searchTerm: nil)
             }
@@ -579,10 +586,10 @@ class SearchViewController: SiteTableViewController,
             searchDelegate?.searchViewController(self, didSelectURL: firefoxSuggestion.url, searchTerm: nil)
         }
     }
-
+    
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         guard shouldShowHeader(for: section) else { return 0 }
-
+        
         return UITableView.automaticDimension
     }
 
@@ -630,7 +637,7 @@ class SearchViewController: SiteTableViewController,
         case .remoteTabs:
             return filteredRemoteClientTabs.count
         case .bookmarksAndHistory:
-            return data.count
+            return filteredBookmarksAndHistory.count
         case .searchHighlights:
             return searchHighlights.count
         case .firefoxSuggestions:
@@ -644,9 +651,8 @@ class SearchViewController: SiteTableViewController,
 
     func tableView(_ tableView: UITableView, didHighlightRowAt indexPath: IndexPath) {
         guard let section = SearchListSection(rawValue: indexPath.section) else { return }
-
         if section == .bookmarksAndHistory,
-            let suggestion = data[indexPath.item] {
+            let suggestion = filteredBookmarksAndHistory[indexPath.item] {
             searchDelegate?.searchViewController(self, didHighlightText: suggestion.url, search: false)
         }
     }
@@ -727,7 +733,7 @@ class SearchViewController: SiteTableViewController,
                 cell = twoLineCell
             }
         case .bookmarksAndHistory:
-            if let site = data[indexPath.row] {
+            if let site = filteredBookmarksAndHistory[indexPath.row] {
                 let isBookmark = site.bookmarked ?? false
                 cell = twoLineCell
                 twoLineCell.descriptionLabel.isHidden = false
@@ -820,6 +826,29 @@ class SearchViewController: SiteTableViewController,
         default:
             break
         }
+    }
+    
+    private func filterData(data: Cursor<Site>) -> [Site?]{
+        return data.filter { item in
+            guard profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowSponsoredSuggestions) ?? false  else { return true }
+            
+            guard let urlString = item?.url as? String,
+                  let url = URL(string: urlString) else {return true}
+            
+            return !containsQueryParameters(searchParamString: "mfadid=adm", url: url)
+        }
+    }
+    
+    private func containsQueryParameters(searchParamString: String, url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let searchParams = components.queryItems else { return false }
+        for searchParam in searchParams {
+            let matchString = "\(searchParam.name)=\(searchParam.value ?? "" )"
+            if matchString == searchParamString {
+                return true
+            }
+        }
+        return false
     }
 }
 
