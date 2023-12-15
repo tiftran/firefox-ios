@@ -67,4 +67,11 @@ class SearchViewControllerTest: XCTestCase {
 
         XCTAssertEqual(searchViewController.firefoxSuggestions.count, 0)
     }
+
+    func testContainsQueryParameters() {
+        profile.prefs.setString("a=b", forKey: PrefsKeys.FirefoxSuggestHideWithSearchParam)
+        XCTAssertTrue(searchViewController.containsQueryParameters(url: URL(string: "https://example.com?a=b&d=f")!))
+        XCTAssertFalse(searchViewController.containsQueryParameters(url: URL(string: "https://example.com?c=b&f=g")!))
+        XCTAssertFalse(searchViewController.containsQueryParameters(url: URL(string: "https://example.com/")!))
+    }
 }
