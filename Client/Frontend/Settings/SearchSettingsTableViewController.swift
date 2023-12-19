@@ -279,7 +279,7 @@ class SearchSettingsTableViewController: ThemedTableViewController, FeatureFlagg
         case .privateSession:
             return nil
         case .firefoxSuggestSettings:
-            guard indexPath.item == 2 else { return nil }
+            guard indexPath.item == ItemSuggestionLearn else { return nil }
             let viewController = SettingsContentViewController()
             viewController.url = SupportUtils.URLForTopic("search-suggestions-firefox")
             navigationController?.pushViewController(viewController, animated: true)
