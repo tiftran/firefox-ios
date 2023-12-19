@@ -167,7 +167,7 @@ class SearchViewController: SiteTableViewController,
         }
     }
 
-    func loadFirefoxSuggestions() -> Task<(), Error>? {
+    func loadFirefoxSuggestions() -> Task<(), Never>? {
         let includeNonSponsored = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowNonSponsoredSuggestions) ?? false
         let includeSponsored = profile.prefs.boolForKey(PrefsKeys.FirefoxSuggestShowSponsoredSuggestions) ?? false
         guard featureFlags.isFeatureEnabled(.firefoxSuggestFeature, checking: .buildAndUser) && (includeNonSponsored || includeSponsored) else { return nil }
